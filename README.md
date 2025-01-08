@@ -27,8 +27,8 @@ Telegram Bot для управления личным кабинетом сту�
 
 1. **Клонируйте репозиторий:**
    ```bash
-   git clone https://github.com/your-repository-link.git
-   cd your-repository
+   git clone https://github.com/chashkaTeacher/students_bot.git
+   cd students_bot
 
 2. **Установите зависимости: Убедитесь, что у вас установлен Python 3.8+.**
    ```bash
