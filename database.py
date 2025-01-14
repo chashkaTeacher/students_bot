@@ -1,4 +1,5 @@
 import sqlite3
+from natsort import natsorted
 from utils import generate_password
 
 
@@ -34,6 +35,25 @@ def create_tables():
         )
     ''')
 
+    # Создаём таблицу для домашних заданий
+    db_execute('''
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                link TEXT NOT NULL,
+                exam_type TEXT NOT NULL
+            )
+        ''')
+
+    db_execute('''
+            CREATE TABLE IF NOT EXISTS notes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                link TEXT NOT NULL,
+                exam_type TEXT NOT NULL
+            )
+        ''')
+
 
 def get_user_by_password(password):
     with sqlite3.connect('your_database.db') as conn:
@@ -55,7 +75,7 @@ def get_all_users():
         cursor.execute('SELECT id, name, exam, description FROM users')  # Извлекаем все записи
         students = cursor.fetchall()
         return [(student[0], f"{student[1]} ({student[2]}) {student[3] if student[3] else ''}")
-                for student in students ]
+                for student in students]
 
 
 def get_student_info(student_id):
@@ -79,7 +99,6 @@ def get_student_info(student_id):
                 "password": student[7] or "Не установлен"
             }
         return None
-
 
 
 # Функция для получения пользователя по Telegram ID
@@ -133,3 +152,88 @@ def update_password_to_id(user_id, telegram_id):
         cursor = conn.cursor()
         cursor.execute('UPDATE users SET password = ? WHERE id = ?', (str(telegram_id), user_id))
         conn.commit()
+
+
+# Добавление нового задания в таблицу tasks.
+def add_task(title, link, exam_type):
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO tasks (title, link, exam_type) VALUES (?, ?, ?)',
+                       (title, link, exam_type))
+        conn.commit()
+
+
+# Получение списка заданий для указанного типа экзамена.
+def get_tasks_by_exam(exam_type):
+    """
+    Получение списка заданий для указанного типа экзамена, отсортированного естественным образом по названию.
+    """
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, title, link FROM tasks WHERE exam_type = ?', (exam_type,)
+        )
+        tasks = cursor.fetchall()  # [(id, title, link), ...]
+
+    # Естественная сортировка по названию
+    return natsorted(tasks, key=lambda x: x[1])  # Сортируем по второму элементу (title)
+
+
+def get_notes_by_exam(exam_type):
+    """
+    Получение списка конспектов для указанного типа экзамена, отсортированного естественным образом по названию.
+    """
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            'SELECT id, title, link FROM notes WHERE exam_type = ?', (exam_type,)
+        )
+        notes = cursor.fetchall()  # [(id, title, link), ...]
+
+    # Естественная сортировка по названию
+    return natsorted(notes, key=lambda x: x[1])  # Сортируем по второму элементу (title)
+
+
+# Удаление задания из базы данных по ID.
+def delete_task(task_id):
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM tasks WHERE id = ?', (task_id,))
+        conn.commit()
+
+
+# Получение задания по ID.
+def get_task_by_id(task_id):
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT id, title, link FROM tasks WHERE id = ?', (task_id,))
+        return cursor.fetchone()  # Кортеж: (id, title, link)
+
+
+def is_task_title_unique(title, exam_type):
+    """
+    Проверяет, уникально ли название задания для указанного экзамена.
+
+    :param title: Название задания.
+    :param exam_type: Тип экзамена (ОГЭ/ЕГЭ).
+    :return: True, если название уникально, иначе False.
+    """
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM tasks WHERE title = ? AND exam_type = ?", (title, exam_type))
+        return cursor.fetchone() is None  # Если задание не найдено, возвращаем True
+
+
+def is_note_title_unique(title: str, exam_type: str) -> bool:
+    """
+    Проверяет, уникально ли название конспекта для указанного экзамена.
+
+    :param title: Название конспекта.
+    :param exam_type: Тип экзамена (ОГЭ или ЕГЭ).
+    :return: True, если название уникально, иначе False.
+    """
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT id FROM notes WHERE title = ? AND exam_type = ?', (title, exam_type))
+        result = cursor.fetchone()
+        return result is None  # Если результат пустой, название уникально

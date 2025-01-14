@@ -1,37 +1,25 @@
 import re
 from core import *
-from main import handle_confirmation, handle_delete_description
+from main import handle_confirmation
 
 
 # Обработка выбора поля
 async def handle_edit_field(update: Update, context: CallbackContext):
     query = update.callback_query
-    field = query.data.split(":")[1]  # Извлекаем поле для изменения
-    context.user_data['editing_field'] = field  # Сохраняем редактируемое поле
+    field = query.data.split(":")[1]
+    context.user_data['editing_field'] = field
     context.user_data['state'] = "UPDATING_FIELD"  # Устанавливаем состояние
 
     if field == "exam":
-        # Показываем reply-кнопки для выбора экзамена
-        reply_markup = ReplyKeyboardMarkup(
-            [['ОГЭ', 'ЕГЭ']],
-            one_time_keyboard=True,
-            resize_keyboard=True
-        )
+        reply_markup = ReplyKeyboardMarkup([['ОГЭ', 'ЕГЭ']], one_time_keyboard=True, resize_keyboard=True)
         await query.message.reply_text("Выберите новый экзамен:", reply_markup=reply_markup)
-        return  # Завершаем выполнение, чтобы не запрашивать текстовый ввод
+        return
 
-    # Если редактируемое поле — описание
     if field == "description":
-        # Сообщение с текущим описанием и кнопкой "Удалить описание"
-        message_text = f"Введите новое описание или нажмите кнопку 'Удалить описание'."
-        reply_markup = ReplyKeyboardMarkup(
-            [['Удалить описание']],
-            one_time_keyboard=True,
-            resize_keyboard=True
-        )
-
-        await query.message.reply_text(message_text, reply_markup=reply_markup)
-        return  # Завершаем выполнение
+        reply_markup = ReplyKeyboardMarkup([['Удалить описание']], one_time_keyboard=True, resize_keyboard=True)
+        await query.message.reply_text("Введите новое описание или нажмите кнопку 'Удалить описание':",
+                                       reply_markup=reply_markup)
+        return
 
     field_name = {
         "name": "имя",
@@ -56,46 +44,31 @@ async def handle_new_exam(update: Update, context: CallbackContext):
 
 async def global_message_handler(update: Update, context: CallbackContext):
     user_data = context.user_data
-    state = user_data.get('state')  # Получаем текущее состояние пользователя
-    editing_field = user_data.get('editing_field')
-
-    # Если пользователь нажимает "Удалить описание"
-    if editing_field == "description" and update.message.text == "Удалить описание":
-        await handle_delete_description(update, context)
-        return
+    state = user_data.get('state')
 
     if not state:
         await update.message.reply_text("Напишите /start, чтобы начать.")
         return
 
-    if state == "CHOOSING_FIELD":
-        await handle_edit_field(update, context)
-
-    elif state == "UPDATING_FIELD":
+    if state == "UPDATING_FIELD":
         await handle_new_value(update, context)
-
     elif state == "CONFIRMATION":
         await handle_confirmation(update, context)
-
     else:
-        return
+        await update.message.reply_text("Неизвестное состояние. Попробуйте снова.")
 
 
 async def handle_new_value(update: Update, context: CallbackContext):
     new_value = update.message.text
     field = context.user_data.get('editing_field')
 
-    # Проверка на пустую строку для описания
     if field == "description" and new_value.strip() == "":
-        new_value = None  # Устанавливаем None для базы данных, если строка пустая
+        new_value = None
 
-    # Проверка на корректность ссылки
-    if field == "class_link":
-        if not re.match(r"^https?://", new_value):
-            await update.message.reply_text("Пожалуйста, введите корректную ссылку (начинается с http:// или https://)")
-            return  # Оставляем состояние UPDATING_FIELD для повторного ввода
+    if field == "class_link" and not re.match(r"^https?://", new_value):
+        await update.message.reply_text("Пожалуйста, введите корректную ссылку (начинается с http:// или https://)")
+        return
 
-    # Сохраняем новое значение и состояние
     context.user_data['new_value'] = new_value
     context.user_data['state'] = "CONFIRMATION"  # Устанавливаем состояние подтверждения
 

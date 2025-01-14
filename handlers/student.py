@@ -4,14 +4,38 @@ from database import *
 
 # Меню ученика
 async def student_menu(update: Update, context: CallbackContext):
-    reply_markup = ReplyKeyboardMarkup(
-        [
-            ['Домашнее задание', 'Актуальный вариант'],  # Первая строка
-            ['Конспекты', 'Подключиться к занятию'],  # Вторая строка
-            ['Вернуться в главное меню']  # Третья строка
-        ],
-        resize_keyboard=True
-    )
+    telegram_id = update.message.from_user.id if update.message else update.callback_query.from_user.id
+
+    # Получаем экзамен ученика
+    with sqlite3.connect('your_database.db') as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT exam FROM users WHERE telegram_id = ?', (telegram_id,))
+        exam = cursor.fetchone()
+
+    if not exam:
+        await update.message.reply_text("Ошибка: экзамен не найден.")
+        return STUDENT_MENU
+
+    exam = exam[0]  # Извлекаем название экзамена (ОГЭ, ЕГЭ или Школьная программа)
+
+    # Формируем меню в зависимости от экзамена
+    if exam in ["ОГЭ", "ЕГЭ"]:
+        reply_markup = ReplyKeyboardMarkup(
+            [
+                ['Домашнее задание', 'Актуальный вариант'],  # Первая строка
+                ['Конспекты', 'Подключиться к занятию']  # Вторая строка
+            ],
+            resize_keyboard=True
+        )
+    else:  # Школьная программа
+        reply_markup = ReplyKeyboardMarkup(
+            [
+                ['Домашнее задание'],  # Первая строка
+                ['Подключиться к занятию']  # Вторая строка
+            ],
+            resize_keyboard=True
+        )
+
     if update.message:
         await update.message.reply_text("Вы в меню ученика:", reply_markup=reply_markup)
     elif update.callback_query:
@@ -84,35 +108,67 @@ async def handle_student_menu(update: Update, context: CallbackContext):
             await update.message.reply_text("У вас пока нет заданий.", reply_markup=reply_markup)
         return STUDENT_MENU
 
+
+
     elif choice == "Конспекты":
+
         # Получаем экзамен ученика
+
         with sqlite3.connect('your_database.db') as conn:
+
             cursor = conn.cursor()
+
             cursor.execute('SELECT exam FROM users WHERE telegram_id = ?', (telegram_id,))
+
             exam = cursor.fetchone()
 
         if not exam:
             keyboard = [[InlineKeyboardButton("Вернуться в меню", callback_data="return_to_menu")]]
+
             reply_markup = InlineKeyboardMarkup(keyboard)
+
             await update.message.reply_text("Ошибка: экзамен не найден.", reply_markup=reply_markup)
+
             return STUDENT_MENU
 
         exam = exam[0]  # Извлекаем название экзамена (ОГЭ или ЕГЭ)
 
+        # Загружаем конспекты из базы данных
+
+        notes = get_notes_by_exam(exam)
+
+        if not notes:
+            keyboard = [[InlineKeyboardButton("Вернуться в меню", callback_data="return_to_menu")]]
+
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            await update.message.reply_text("Конспекты для вашего экзамена пока отсутствуют.",
+                                            reply_markup=reply_markup)
+
+            return STUDENT_MENU
+
         # Формируем кнопки для конспектов по экзамену (по 2 в ряду)
-        notes = NOTES_OPTIONS.get(exam, {})
+
         keyboard = []
+
         row = []
-        for idx, (name, link) in enumerate(notes.items(), start=1):
-            row.append(InlineKeyboardButton(name, url=link))
+
+        for idx, (note_id, title, link) in enumerate(notes, start=1):
+
+            row.append(InlineKeyboardButton(title, url=link))
+
             if len(row) == 2 or idx == len(notes):  # Завершаем строку после двух кнопок или в конце
+
                 keyboard.append(row)
+
                 row = []
+
         keyboard.append([InlineKeyboardButton("Вернуться в меню", callback_data="return_to_menu")])  # Кнопка возврата
 
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         await update.message.reply_text("Выберите конспект:", reply_markup=reply_markup)
+
         return STUDENT_MENU
 
     elif choice == "Актуальный вариант":
